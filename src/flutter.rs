@@ -902,6 +902,7 @@ impl InvokeUiSession for FlutterHandler {
         let mut features: HashMap<&str, bool> = Default::default();
         for ref f in pi.features.iter() {
             features.insert("privacy_mode", f.privacy_mode);
+            features.insert("usb_redirection", f.usb_redirection);
         }
         // compatible with 1.1.9
         if get_version_number(&pi.version) < get_version_number("1.2.0") {
@@ -1131,6 +1132,10 @@ impl InvokeUiSession for FlutterHandler {
             &[("id", json!(id)), ("path", json!(path))],
             &[],
         );
+    }
+
+    fn update_usb_redirection(&self, data: String) {
+        self.push_event("usb_redirection", &[("data", &data)], &[]);
     }
 
     fn handle_screenshot_resp(&self, sid: String, msg: String) {

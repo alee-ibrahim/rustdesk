@@ -475,6 +475,28 @@ impl<T: InvokeUiSession> Session<T> {
         crate::common::is_support_screenshot_num(self.lc.read().unwrap().version)
     }
 
+    /// The peer accepts USB devices and this side can share them.
+    pub fn is_usb_redirection_supported(&self) -> bool {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            let peer = self
+                .lc
+                .read()
+                .unwrap()
+                .peer_info
+                .as_ref()
+                .map_or(false, |pi| pi.features.usb_redirection);
+            peer && crate::usb_redirect::controller::is_supported()
+        }
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        false
+    }
+
+    /// `action` is "list", "share" or "stop".
+    pub fn usb_redirect(&self, action: String, bus_id: String) {
+        self.send(Data::UsbRedirect((action, bus_id)));
+    }
+
     pub fn take_screenshot(&self, display: i32, sid: String) {
         self.send(Data::TakeScreenshot((display, sid)));
     }
@@ -1767,6 +1789,8 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn printer_request(&self, id: i32, path: String);
     fn handle_screenshot_resp(&self, sid: String, msg: String);
     fn handle_terminal_response(&self, response: TerminalResponse);
+    /// USB redirection state as JSON, see `usb_redirect::controller`.
+    fn update_usb_redirection(&self, _data: String) {}
 }
 
 impl<T: InvokeUiSession> Deref for Session<T> {

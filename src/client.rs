@@ -5064,6 +5064,8 @@ pub enum Data {
     ResetDecoder(Option<usize>),
     RenameFile((i32, String, String, bool)),
     TakeScreenshot((i32, String)),
+    /// USB redirection request from the UI: (action, bus id).
+    UsbRedirect((String, String)),
 }
 
 pub async fn confirm_insecure_connection(

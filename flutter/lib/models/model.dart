@@ -41,6 +41,7 @@ import 'package:vector_math/vector_math.dart' show Vector2;
 import '../common.dart';
 import '../utils/image.dart' as img;
 import '../common/widgets/dialog.dart';
+import '../common/widgets/usb_redirection_dialog.dart';
 import 'input_model.dart';
 import 'platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
@@ -413,6 +414,8 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'on_url_scheme_received') {
         // currently comes from "_url" ipc of mac and dbus of linux
         onUrlSchemeReceived(evt);
+      } else if (name == 'usb_redirection') {
+        onUsbRedirectionEvent(sessionId, evt['data'] ?? '');
       } else if (name == 'on_voice_call_waiting') {
         // Waiting for the response from the peer.
         parent.target?.chatModel.onVoiceCallWaiting();

@@ -7,6 +7,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
+import 'package:flutter_hbb/common/widgets/usb_redirection_dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'package:flutter_hbb/models/model.dart';
@@ -778,6 +779,20 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
         actionId: kShortcutActionScreenshot,
       ));
     }
+  }
+  // usb redirection
+  if (isDefaultConn &&
+      isDesktop &&
+      perms['keyboard'] != false &&
+      'true' ==
+          bind.sessionGetCommonSync(
+              sessionId: sessionId,
+              key: 'is_usb_redirection_supported',
+              param: '')) {
+    v.add(TTextMenu(
+      child: Text(translate('USB devices')),
+      onPressed: () => showUsbRedirectionDialog(sessionId, ffi.dialogManager),
+    ));
   }
   // fingerprint
   if (!(isDesktop || isWebDesktop)) {

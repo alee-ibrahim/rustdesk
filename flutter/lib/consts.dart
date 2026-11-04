@@ -123,6 +123,7 @@ const String kTerminalClipboardWriteUnconfigured = "";
 const String kTerminalClipboardWriteAllowed = "Y";
 const String kTerminalClipboardWriteDenied = "N";
 const String kOptionEnableTunnel = "enable-tunnel";
+const String kOptionAllowUsbRedirection = "allow-usb-redirection";
 const String kOptionEnableRemoteRestart = "enable-remote-restart";
 const String kOptionEnableBlockInput = "enable-block-input";
 const String kOptionEnablePrivacyMode = "enable-privacy-mode";

@@ -104,6 +104,8 @@ pub struct Remote<T: InvokeUiSession> {
     sent_close_reason: bool,
     cursor_dedupe: CursorDedupe,
     trusted_device: crate::trusted_devices::client::Session,
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    usb_redirect: crate::usb_redirect::controller::UsbRedirectClient,
 }
 
 #[derive(Default)]
@@ -129,6 +131,14 @@ impl<T: InvokeUiSession> Remote<T> {
         receiver: mpsc::UnboundedReceiver<Data>,
         sender: mpsc::UnboundedSender<Data>,
     ) -> Self {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        let usb_redirect = {
+            let ui = handler.ui_handler.clone();
+            crate::usb_redirect::controller::UsbRedirectClient::new(
+                sender.clone(),
+                Arc::new(move |v| ui.update_usb_redirection(v)),
+            )
+        };
         Self {
             handler,
             audio_sender: crate::client::start_audio_thread(),
@@ -158,6 +168,8 @@ impl<T: InvokeUiSession> Remote<T> {
             sent_close_reason: false,
             cursor_dedupe: Default::default(),
             trusted_device: Default::default(),
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            usb_redirect,
         }
     }
 
@@ -426,6 +438,8 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 log::debug!("Exit io_loop of id={}", self.handler.get_id());
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                self.usb_redirect.close();
                 // Stop client audio server.
                 if let Some(s) = self.stop_voice_call_sender.take() {
                     s.send(()).ok();
@@ -1379,6 +1393,10 @@ impl<T: InvokeUiSession> Remote<T> {
                     ..Default::default()
                 });
                 allow_err!(peer.send(&msg).await);
+            }
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            Data::UsbRedirect((action, bus_id)) => {
+                self.usb_redirect.handle_ui(&action, bus_id);
             }
             _ => {}
         }
@@ -2584,6 +2602,10 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     self.handler.handle_terminal_response(response);
+                }
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                Some(message::Union::UsbRedirect(frame)) => {
+                    self.usb_redirect.handle_peer(frame);
                 }
                 _ => {}
             }

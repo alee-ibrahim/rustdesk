@@ -369,6 +369,8 @@ pub struct Connection {
     terminal: bool,
     port_forward_socket: Option<Framed<TcpStream, BytesCodec>>,
     port_forward_mux: Option<super::port_forward_mux::PortForwardMux>,
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    usb_redirect: Option<crate::usb_redirect::controlled::UsbRedirectServer>,
     port_forward_address: String,
     tx_to_cm: mpsc::UnboundedSender<ipc::Data>,
     authorized: bool,
@@ -587,6 +589,8 @@ impl Connection {
             terminal: false,
             port_forward_socket: None,
             port_forward_mux: None,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            usb_redirect: None,
             port_forward_address: "".to_owned(),
             tx_to_cm,
             authorized: false,
@@ -2103,6 +2107,9 @@ impl Connection {
             privacy_mode: privacy_mode::is_privacy_mode_supported(),
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             terminal,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            usb_redirection: Self::usb_redirection_allowed_locally()
+                && crate::usb_redirect::controlled::is_supported(),
             ..Default::default()
         })
         .into();
@@ -2403,6 +2410,66 @@ impl Connection {
     #[inline]
     fn send_to_cm(&mut self, data: ipc::Data) {
         self.tx_to_cm.send(data).ok();
+    }
+
+    /// Off unless explicitly allowed: a redirected device is a real device on this machine.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn usb_redirection_allowed_locally() -> bool {
+        config::option2bool(
+            keys::OPTION_ALLOW_USB_REDIRECTION,
+            &Config::get_option(keys::OPTION_ALLOW_USB_REDIRECTION),
+        )
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    async fn handle_usb_redirect(&mut self, frame: UsbRedirect) {
+        let Some(tx) = self.inner.tx.clone() else {
+            return;
+        };
+        if let Some(usb_redirect::Union::Attach(req)) = &frame.union {
+            let allowed =
+                Self::usb_redirection_allowed_locally() && self.peer_keyboard_enabled();
+            let dev = &req.device;
+            log::info!(
+                "#{} usb redirection: peer asks to attach {} ({:04x}:{:04x} {}), allowed: {}",
+                self.inner.id(),
+                dev.bus_id,
+                dev.vendor_id,
+                dev.product_id,
+                dev.description,
+                allowed
+            );
+            self.post_conn_audit(json!({
+                "action": "usb_attach",
+                "bus_id": dev.bus_id,
+                "vid": format!("{:04x}", dev.vendor_id),
+                "pid": format!("{:04x}", dev.product_id),
+                "description": dev.description,
+                "allowed": allowed,
+            }));
+            if !allowed {
+                crate::usb_redirect::controlled::UsbRedirectServer::refuse(
+                    &tx,
+                    frame,
+                    "USB redirection is not allowed on the remote side",
+                );
+                return;
+            }
+        }
+        if let Some(usb_redirect::Union::Detach(req)) = &frame.union {
+            self.post_conn_audit(json!({
+                "action": "usb_detach",
+                "bus_id": req.bus_id,
+            }));
+        }
+        let deny = Config::get_option(keys::OPTION_USB_REDIRECTION_DENY);
+        let conn_id = self.inner.id();
+        self.usb_redirect
+            .get_or_insert_with(|| {
+                crate::usb_redirect::controlled::UsbRedirectServer::new(tx, conn_id)
+            })
+            .handle(frame, deny)
+            .await;
     }
 
     fn handle_port_forward_channel(&mut self, ch: PortForwardChannel) {
@@ -4125,6 +4192,8 @@ impl Connection {
                     }
                 }
                 Some(message::Union::PortForwardChannel(ch)) => self.handle_port_forward_channel(ch),
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                Some(message::Union::UsbRedirect(frame)) => self.handle_usb_redirect(frame).await,
                 Some(message::Union::TerminalAction(action)) => {
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     allow_err!(self.handle_terminal_action(action).await);
@@ -5342,6 +5411,10 @@ impl Connection {
         if let Some(mut mux) = self.port_forward_mux.take() {
             mux.close_all();
         }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if let Some(mut usb) = self.usb_redirect.take() {
+            usb.close_all();
+        }
     }
 
     // The `reason` should be consistent with `check_if_retry` if not empty
@@ -6201,6 +6274,7 @@ impl Connection {
             Some(message::Union::TerminalAction(_)) => "terminal_action",
             Some(message::Union::TerminalResponse(_)) => "terminal_response",
             Some(message::Union::PortForwardChannel(_)) => "port_forward_channel",
+            Some(message::Union::UsbRedirect(_)) => "usb_redirect",
             Some(message::Union::OsLogin(_)) => "os_login",
             Some(message::Union::Misc(misc)) => Self::misc_message_family(misc),
             Some(_) => "message.other",

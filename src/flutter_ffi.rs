@@ -3036,6 +3036,14 @@ pub fn session_set_common(session_id: SessionID, key: String, value: String) {
             s.continue_insecure_connection(value == "Y");
             return;
         }
+        // value: {"action": "list" | "share" | "stop", "bus_id": "..."}
+        if key == "usb-redirection" {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&value) {
+                let field = |k: &str| v[k].as_str().unwrap_or_default().to_owned();
+                s.usb_redirect(field("action"), field("bus_id"));
+            }
+            return;
+        }
     }
 }
 
@@ -3055,6 +3063,8 @@ pub fn session_get_common(
     if let Some(s) = sessions::get_session_by_session_id(&session_id) {
         let v = if key == "is_screenshot_supported" {
             s.is_screenshot_supported().to_string()
+        } else if key == "is_usb_redirection_supported" {
+            s.is_usb_redirection_supported().to_string()
         } else if key == "login_method" {
             s.lc.read().unwrap().get_login_method().to_owned()
         } else {

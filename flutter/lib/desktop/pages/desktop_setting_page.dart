@@ -1286,6 +1286,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             _OptionCheckBox(context, 'Enable remote configuration modification',
                 kOptionAllowRemoteConfigModification,
                 enabled: enabled, fakeValue: fakeValue),
+            // Off by default and not implied by full access.
+            if (isWindows || isLinux)
+              _OptionCheckBox(context, 'Enable USB redirection',
+                  kOptionAllowUsbRedirection,
+                  enabled: enabled),
           ],
         ),
       ]);

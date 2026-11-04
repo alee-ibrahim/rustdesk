@@ -104,6 +104,8 @@ message Features {
   bool privacy_mode = 1;
   bool terminal = 2;
   bool port_forward_mux = 3;
+  // The peer accepts `UsbRedirect`: it may attach USB/IP devices the controller shares.
+  bool usb_redirection = 4;
 }
 
 message CodecAbility {
@@ -1002,6 +1004,61 @@ message PortForwardChannel {
   }
 }
 
+// USB redirection: the controller shares a local USB device through its USB/IP
+// server (usbipd); the controlled side attaches it with its USB/IP client
+// (vhci). USB/IP bytes travel inside the session as `UsbStream*` frames.
+// Design adapted from RuDesktop (rudesktop.ru, AGPL-3.0).
+message UsbDeviceInfo {
+  string bus_id = 1;
+  uint32 vendor_id = 2;
+  uint32 product_id = 3;
+  string description = 4;
+}
+
+// controller -> controlled
+message UsbAttachRequest {
+  UsbDeviceInfo device = 1;
+}
+
+// controlled -> controller
+message UsbAttachResult {
+  string bus_id = 1;
+  bool success = 2;
+  string error = 3;
+  int32 port = 4;
+}
+
+// controller -> controlled
+message UsbDetachRequest {
+  string bus_id = 1;
+}
+
+// controlled -> controller, also sent when the controlled side detaches on its own
+message UsbDetached {
+  string bus_id = 1;
+}
+
+// One TCP stream of the controlled side's USB/IP client, both directions.
+message UsbStreamData {
+  uint32 stream_id = 1;
+  bytes data = 2;
+}
+
+message UsbStreamClose {
+  uint32 stream_id = 1;
+}
+
+message UsbRedirect {
+  oneof union {
+    UsbAttachRequest attach = 1;
+    UsbAttachResult attach_result = 2;
+    UsbDetachRequest detach = 3;
+    UsbDetached detached = 4;
+    UsbStreamData data = 5;
+    UsbStreamClose close = 6;
+  }
+}
+
 message Message {
   oneof union {
     SignedId signed_id = 3;
@@ -1037,5 +1094,6 @@ message Message {
     PortForwardChannel port_forward_channel = 33;
     // Auto Login: the peer types the password only if it is at its logon or lock screen.
     OSLogin os_login = 34;
+    UsbRedirect usb_redirect = 35;
   }
 }

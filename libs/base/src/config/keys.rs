@@ -43,6 +43,11 @@ pub const OPTION_ENABLE_TERMINAL: &str = "enable-terminal";
 pub const OPTION_TERMINAL_PERSISTENT: &str = "terminal-persistent";
 pub const OPTION_ENABLE_AUDIO: &str = "enable-audio";
 pub const OPTION_ENABLE_TUNNEL: &str = "enable-tunnel";
+/// Off unless "Y": lets a controlling peer attach its USB devices here.
+pub const OPTION_ALLOW_USB_REDIRECTION: &str = "allow-usb-redirection";
+/// Comma separated USB classes refused for redirection, see `usb_redirect::policy`.
+/// Empty means the default, "hid-boot,net,wireless"; "none" refuses nothing.
+pub const OPTION_USB_REDIRECTION_DENY: &str = "usb-redirection-deny";
 pub const OPTION_ENABLE_REMOTE_RESTART: &str = "enable-remote-restart";
 pub const OPTION_ENABLE_RECORD_SESSION: &str = "enable-record-session";
 pub const OPTION_ENABLE_BLOCK_INPUT: &str = "enable-block-input";
@@ -280,6 +285,8 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_REMOTE_PRINTER,
     OPTION_ENABLE_AUDIO,
     OPTION_ENABLE_TUNNEL,
+    OPTION_ALLOW_USB_REDIRECTION,
+    OPTION_USB_REDIRECTION_DENY,
     OPTION_ENABLE_REMOTE_RESTART,
     OPTION_ENABLE_RECORD_SESSION,
     OPTION_ENABLE_BLOCK_INPUT,
