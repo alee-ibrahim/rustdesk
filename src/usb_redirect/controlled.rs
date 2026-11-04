@@ -5,7 +5,7 @@
 //! own USB/IP server answers it.
 
 use super::{
-    close_msg, data_msg, policy, tools, usbip_proto, wrap, MAX_ATTACHED, MAX_FRAME, STREAM_QUEUE,
+    close_msg, data_msg, policy, tools, usbip_proto, wrap, USB_MAX_ATTACHED, USB_MAX_FRAME, USB_STREAM_QUEUE,
 };
 use base::message_proto::*;
 use hbb_common::{
@@ -30,17 +30,17 @@ use std::{
 };
 
 /// Whether this side can attach at all, ignoring the option.
-pub fn is_supported() -> bool {
+pub(crate) fn is_supported() -> bool {
     tools::usbip_client().is_some()
 }
 
-/// The connection's outbound queue, as `server::connection::Sender`.
-pub type Sender = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
+/// The connection's outbound queue, as `server::connection::UsbConnTx`.
+pub(crate) type UsbConnTx = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
 
 type Streams = Arc<Mutex<HashMap<u32, mpsc::Sender<Bytes>>>>;
 
-pub struct UsbRedirectServer {
-    tx: Sender,
+pub(crate) struct UsbRedirectServer {
+    tx: UsbConnTx,
     conn_id: i32,
     listener: Option<(u16, JoinHandle<()>)>,
     streams: Streams,
@@ -48,12 +48,12 @@ pub struct UsbRedirectServer {
     attached: Arc<Mutex<HashMap<String, i32>>>,
 }
 
-fn send(tx: &Sender, msg: Message) {
+fn send(tx: &UsbConnTx, msg: Message) {
     tx.send((Instant::now(), Arc::new(msg))).ok();
 }
 
 impl UsbRedirectServer {
-    pub fn new(tx: Sender, conn_id: i32) -> Self {
+    pub(crate) fn new(tx: UsbConnTx, conn_id: i32) -> Self {
         Self {
             tx,
             conn_id,
@@ -64,14 +64,14 @@ impl UsbRedirectServer {
     }
 
     /// Refuses an attach without looking at it, for a peer not allowed to.
-    pub fn refuse(tx: &Sender, frame: UsbRedirect, reason: &str) {
+    pub(crate) fn refuse(tx: &UsbConnTx, frame: UsbRedirect, reason: &str) {
         if let Some(usb_redirect::Union::Attach(req)) = frame.union {
             let bus_id = req.device.bus_id.clone();
             send(tx, attach_result(bus_id, Err(reason.to_owned())));
         }
     }
 
-    pub async fn handle(&mut self, frame: UsbRedirect, deny: String) {
+    pub(crate) async fn handle(&mut self, frame: UsbRedirect, deny: String) {
         match frame.union {
             Some(usb_redirect::Union::Attach(req)) => self.on_attach(req, deny).await,
             Some(usb_redirect::Union::Detach(req)) => self.on_detach(req.bus_id),
@@ -105,7 +105,7 @@ impl UsbRedirectServer {
             let attached = self.attached.lock().unwrap();
             if attached.contains_key(&bus_id) {
                 Some("already attached")
-            } else if attached.len() >= MAX_ATTACHED {
+            } else if attached.len() >= USB_MAX_ATTACHED {
                 Some("too many attached devices")
             } else {
                 None
@@ -188,7 +188,7 @@ impl UsbRedirectServer {
     }
 
     /// Session end: detach everything, then drop the listener and streams.
-    pub fn close_all(&mut self) {
+    pub(crate) fn close_all(&mut self) {
         let port = self.listener.as_ref().map(|(p, _)| *p).unwrap_or_default();
         let attached: Vec<(String, i32)> = self.attached.lock().unwrap().drain().collect();
         let conn_id = self.conn_id;
@@ -248,7 +248,7 @@ async fn attach(port: u16, bus_id: &str, deny: &str) -> Result<i32, String> {
         .map_err(|e| e.to_string())
 }
 
-async fn accept_loop(listener: TcpListener, tx: Sender, streams: Streams) {
+async fn accept_loop(listener: TcpListener, tx: UsbConnTx, streams: Streams) {
     let next_id = AtomicU32::new(1);
     loop {
         let (socket, addr) = match listener.accept().await {
@@ -262,7 +262,7 @@ async fn accept_loop(listener: TcpListener, tx: Sender, streams: Streams) {
             continue;
         }
         let id = next_id.fetch_add(1, Ordering::Relaxed);
-        let (data_tx, data_rx) = mpsc::channel(STREAM_QUEUE);
+        let (data_tx, data_rx) = mpsc::channel(USB_STREAM_QUEUE);
         streams.lock().unwrap().insert(id, data_tx);
         tokio::spawn(pump(id, socket, data_rx, tx.clone(), streams.clone()));
     }
@@ -274,12 +274,12 @@ async fn pump(
     id: u32,
     socket: TcpStream,
     mut from_peer: mpsc::Receiver<Bytes>,
-    tx: Sender,
+    tx: UsbConnTx,
     streams: Streams,
 ) {
     let (mut rd, mut wr) = socket.into_split();
     let reader = async {
-        let mut buf = vec![0u8; MAX_FRAME];
+        let mut buf = vec![0u8; USB_MAX_FRAME];
         loop {
             match rd.read(&mut buf).await {
                 Ok(0) | Err(_) => break,

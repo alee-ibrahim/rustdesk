@@ -7,7 +7,7 @@
 
 use super::usbip_proto::{Device, Interface};
 
-pub const DEFAULT_DENY: &str = "hid-boot,net,wireless";
+pub(crate) const USB_DEFAULT_DENY: &str = "hid-boot,net,wireless";
 
 const HID: u8 = 0x03;
 const CDC: u8 = 0x02;
@@ -36,11 +36,11 @@ fn matches(rule: &str, i: &Interface) -> bool {
     }
 }
 
-/// `deny` is the option value; empty means `DEFAULT_DENY`, "none" refuses nothing.
+/// `deny` is the option value; empty means `USB_DEFAULT_DENY`, "none" refuses nothing.
 /// Returns why `dev` is refused, if it is.
-pub fn denied(dev: &Device, deny: &str) -> Option<String> {
+pub(crate) fn denied(dev: &Device, deny: &str) -> Option<String> {
     let deny = deny.trim();
-    let deny = if deny.is_empty() { DEFAULT_DENY } else { deny };
+    let deny = if deny.is_empty() { USB_DEFAULT_DENY } else { deny };
     if deny == "none" {
         return None;
     }

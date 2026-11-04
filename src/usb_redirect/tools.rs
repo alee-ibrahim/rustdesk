@@ -12,13 +12,13 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct LocalDevice {
-    pub bus_id: String,
-    pub vendor_id: u16,
-    pub product_id: u16,
-    pub description: String,
+pub(crate) struct LocalDevice {
+    pub(crate) bus_id: String,
+    pub(crate) vendor_id: u16,
+    pub(crate) product_id: u16,
+    pub(crate) description: String,
     /// Exported by the local USB/IP server, so a peer may import it.
-    pub bound: bool,
+    pub(crate) bound: bool,
 }
 
 fn find_in_path(name: &str) -> Option<PathBuf> {
@@ -39,7 +39,7 @@ fn program_files(rel: &str) -> PathBuf {
 }
 
 /// The USB/IP client the controlled side attaches with.
-pub fn usbip_client() -> Option<PathBuf> {
+pub(crate) fn usbip_client() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         first_existing("usbip.exe", &[program_files("USBip\\usbip.exe")])
@@ -58,7 +58,7 @@ pub fn usbip_client() -> Option<PathBuf> {
 }
 
 /// The tool the controller lists and binds devices with.
-pub fn usbip_server() -> Option<PathBuf> {
+pub(crate) fn usbip_server() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         first_existing("usbipd.exe", &[program_files("usbipd-win\\usbipd.exe")])
@@ -92,7 +92,7 @@ fn run(exe: &Path, args: &[&str]) -> ResultType<String> {
 // ---- controlled side ----
 
 /// Attaches `bus_id` exported behind `127.0.0.1:port`; returns the hub port.
-pub fn attach(port: u16, bus_id: &str) -> ResultType<i32> {
+pub(crate) fn attach(port: u16, bus_id: &str) -> ResultType<i32> {
     let exe = usbip_client().ok_or_else(|| anyhow!("USB/IP client not installed"))?;
     let port_s = port.to_string();
     #[cfg(windows)]
@@ -138,7 +138,7 @@ fn linux_hub_port(out: &str, port: u16, bus_id: &str) -> Option<i32> {
     None
 }
 
-pub fn detach(hub_port: i32, port: u16, bus_id: &str) -> ResultType<()> {
+pub(crate) fn detach(hub_port: i32, port: u16, bus_id: &str) -> ResultType<()> {
     let exe = usbip_client().ok_or_else(|| anyhow!("USB/IP client not installed"))?;
     let hub = hub_port.to_string();
     let res = run(&exe, &["detach", "--port", &hub]).map(|_| ());
@@ -158,7 +158,7 @@ pub fn detach(hub_port: i32, port: u16, bus_id: &str) -> ResultType<()> {
 
 // ---- controller ----
 
-pub fn list_local() -> ResultType<Vec<LocalDevice>> {
+pub(crate) fn list_local() -> ResultType<Vec<LocalDevice>> {
     let exe = usbip_server().ok_or_else(|| anyhow!("USB/IP server not installed"))?;
     #[cfg(windows)]
     return Ok(parse_usbipd_list(&run(&exe, &["list"])?));
@@ -250,7 +250,7 @@ fn parse_linux_list_line(line: &str) -> Option<LocalDevice> {
 
 /// Exports `bus_id` through the local USB/IP server. Needs admin rights, so
 /// it asks for them (UAC on Windows, polkit on Linux) unless already root.
-pub fn bind(bus_id: &str) -> ResultType<()> {
+pub(crate) fn bind(bus_id: &str) -> ResultType<()> {
     let exe = usbip_server().ok_or_else(|| anyhow!("USB/IP server not installed"))?;
     #[cfg(windows)]
     {
@@ -280,7 +280,7 @@ pub fn bind(bus_id: &str) -> ResultType<()> {
 
 /// Linux only: a bound device is taken from its local driver, so give it
 /// back. usbipd-win leaves a shared device usable until it is attached.
-pub fn unbind(bus_id: &str) -> ResultType<()> {
+pub(crate) fn unbind(bus_id: &str) -> ResultType<()> {
     #[cfg(not(windows))]
     {
         let exe = usbip_server().ok_or_else(|| anyhow!("USB/IP server not installed"))?;

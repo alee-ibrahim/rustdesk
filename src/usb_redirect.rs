@@ -16,25 +16,25 @@
 //! usbip-win2 (BSD-2-Clause, https://github.com/vadimgrn/usbip-win2) and
 //! usbipd-win (GPL-3.0, https://github.com/dorssel/usbipd-win).
 
-pub mod controlled;
-pub mod controller;
-pub mod policy;
-pub mod tools;
-pub mod usbip_proto;
+pub(crate) mod controlled;
+pub(crate) mod controller;
+pub(crate) mod policy;
+pub(crate) mod tools;
+pub(crate) mod usbip_proto;
 
 /// The port every USB/IP server listens on.
-pub const USBIP_PORT: u16 = 3240;
+pub(crate) const USBIP_TCP_PORT: u16 = 3240;
 /// The largest payload of one `UsbStreamData` frame.
-pub const MAX_FRAME: usize = 64 * 1024;
+pub(crate) const USB_MAX_FRAME: usize = 64 * 1024;
 /// Frames queued towards one local socket before the stream is dropped.
-pub const STREAM_QUEUE: usize = 1024;
+pub(crate) const USB_STREAM_QUEUE: usize = 1024;
 /// Devices one session may have attached at once.
-pub const MAX_ATTACHED: usize = 8;
+pub(crate) const USB_MAX_ATTACHED: usize = 8;
 
 use base::message_proto::*;
 use hbb_common::bytes::Bytes;
 
-pub fn wrap(union: usb_redirect::Union) -> Message {
+pub(crate) fn wrap(union: usb_redirect::Union) -> Message {
     let mut msg = Message::new();
     msg.set_usb_redirect(UsbRedirect {
         union: Some(union),
@@ -43,7 +43,7 @@ pub fn wrap(union: usb_redirect::Union) -> Message {
     msg
 }
 
-pub fn data_msg(stream_id: u32, data: Bytes) -> Message {
+pub(crate) fn data_msg(stream_id: u32, data: Bytes) -> Message {
     wrap(usb_redirect::Union::Data(UsbStreamData {
         stream_id,
         data,
@@ -51,7 +51,7 @@ pub fn data_msg(stream_id: u32, data: Bytes) -> Message {
     }))
 }
 
-pub fn close_msg(stream_id: u32) -> Message {
+pub(crate) fn close_msg(stream_id: u32) -> Message {
     wrap(usb_redirect::Union::Close(UsbStreamClose {
         stream_id,
         ..Default::default()

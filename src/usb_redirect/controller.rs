@@ -1,6 +1,6 @@
 //! The controller side: shares local devices through the local USB/IP server.
 //!
-//! Streams the peer opens are relayed to `127.0.0.1:USBIP_PORT`, but only
+//! Streams the peer opens are relayed to `127.0.0.1:USBIP_TCP_PORT`, but only
 //! once their first request is known to be a device list or an import of a
 //! device this session shares, so the peer cannot reach other exported devices.
 
@@ -8,7 +8,7 @@ use super::{
     close_msg, data_msg,
     tools::{self, LocalDevice},
     usbip_proto::{self, Request},
-    wrap, MAX_FRAME, STREAM_QUEUE, USBIP_PORT,
+    wrap, USB_MAX_FRAME, USB_STREAM_QUEUE, USBIP_TCP_PORT,
 };
 use crate::client::Data;
 use base::message_proto::*;
@@ -33,7 +33,7 @@ const CONNECT_TIMEOUT_MS: u64 = 3000;
 const MAX_PENDING: usize = 64;
 
 /// Whether this side can share at all.
-pub fn is_supported() -> bool {
+pub(crate) fn is_supported() -> bool {
     tools::usbip_server().is_some()
 }
 
@@ -57,17 +57,17 @@ struct State {
     error: String,
 }
 
-pub type UiCallback = Arc<dyn Fn(String) + Send + Sync>;
+pub(crate) type UiCallback = Arc<dyn Fn(String) + Send + Sync>;
 
 #[derive(Clone)]
-pub struct UsbRedirectClient {
+pub(crate) struct UsbRedirectClient {
     state: Arc<Mutex<State>>,
     to_peer: mpsc::UnboundedSender<Data>,
     ui: UiCallback,
 }
 
 impl UsbRedirectClient {
-    pub fn new(to_peer: mpsc::UnboundedSender<Data>, ui: UiCallback) -> Self {
+    pub(crate) fn new(to_peer: mpsc::UnboundedSender<Data>, ui: UiCallback) -> Self {
         Self {
             state: Default::default(),
             to_peer,
@@ -115,7 +115,7 @@ impl UsbRedirectClient {
     }
 
     /// `action` is "list", "share" or "stop", from the UI.
-    pub fn handle_ui(&self, action: &str, bus_id: String) {
+    pub(crate) fn handle_ui(&self, action: &str, bus_id: String) {
         self.lock().error.clear();
         let this = self.clone();
         match action {
@@ -218,7 +218,7 @@ impl UsbRedirectClient {
         }
     }
 
-    pub fn handle_peer(&self, frame: UsbRedirect) {
+    pub(crate) fn handle_peer(&self, frame: UsbRedirect) {
         match frame.union {
             Some(usb_redirect::Union::AttachResult(r)) => {
                 if r.success {
@@ -292,7 +292,7 @@ impl UsbRedirectClient {
             self.refuse_stream(&mut s, id);
             return;
         }
-        let (tx, rx) = mpsc::channel(STREAM_QUEUE);
+        let (tx, rx) = mpsc::channel(USB_STREAM_QUEUE);
         s.streams.insert(id, Stream::Open(tx));
         drop(s);
         let this = self.clone();
@@ -306,7 +306,7 @@ impl UsbRedirectClient {
     async fn pump(&self, id: u32, first: Vec<u8>, mut from_peer: mpsc::Receiver<Bytes>) {
         let socket = match timeout(
             CONNECT_TIMEOUT_MS,
-            TcpStream::connect(("127.0.0.1", USBIP_PORT)),
+            TcpStream::connect(("127.0.0.1", USBIP_TCP_PORT)),
         )
         .await
         {
@@ -321,7 +321,7 @@ impl UsbRedirectClient {
             return;
         }
         let reader = async {
-            let mut buf = vec![0u8; MAX_FRAME];
+            let mut buf = vec![0u8; USB_MAX_FRAME];
             loop {
                 match rd.read(&mut buf).await {
                     Ok(0) | Err(_) => break,
@@ -343,7 +343,7 @@ impl UsbRedirectClient {
     }
 
     /// Session end. The peer detaches on its own when the connection closes.
-    pub fn close(&self) {
+    pub(crate) fn close(&self) {
         let ids: Vec<String> = {
             let mut s = self.lock();
             s.streams.clear();

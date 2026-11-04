@@ -12,10 +12,10 @@ use hbb_common::{
     ResultType,
 };
 
-pub const VERSION: u16 = 0x0111;
-pub const OP_REQ_DEVLIST: u16 = 0x8005;
-pub const OP_REP_DEVLIST: u16 = 0x0005;
-pub const OP_REQ_IMPORT: u16 = 0x8003;
+pub(crate) const USBIP_VERSION: u16 = 0x0111;
+pub(crate) const OP_REQ_DEVLIST: u16 = 0x8005;
+pub(crate) const OP_REP_DEVLIST: u16 = 0x0005;
+pub(crate) const OP_REQ_IMPORT: u16 = 0x8003;
 
 const OP_HEADER_LEN: usize = 8;
 const BUSID_LEN: usize = 32;
@@ -27,34 +27,34 @@ const MAX_DEVICES: u32 = 256;
 const DEVLIST_TIMEOUT_MS: u64 = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Interface {
-    pub class: u8,
-    pub subclass: u8,
-    pub protocol: u8,
+pub(crate) struct Interface {
+    pub(crate) class: u8,
+    pub(crate) subclass: u8,
+    pub(crate) protocol: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Device {
-    pub busid: String,
-    pub vendor_id: u16,
-    pub product_id: u16,
-    pub class: u8,
-    pub subclass: u8,
-    pub protocol: u8,
-    pub interfaces: Vec<Interface>,
+pub(crate) struct Device {
+    pub(crate) busid: String,
+    pub(crate) vendor_id: u16,
+    pub(crate) product_id: u16,
+    pub(crate) class: u8,
+    pub(crate) subclass: u8,
+    pub(crate) protocol: u8,
+    pub(crate) interfaces: Vec<Interface>,
 }
 
 /// What the first bytes of a client's stream ask the server for.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Request {
+pub(crate) enum Request {
     Devlist,
     Import(String),
     Other,
 }
 
-pub fn devlist_request() -> [u8; OP_HEADER_LEN] {
+pub(crate) fn devlist_request() -> [u8; OP_HEADER_LEN] {
     let mut req = [0u8; OP_HEADER_LEN];
-    req[0..2].copy_from_slice(&VERSION.to_be_bytes());
+    req[0..2].copy_from_slice(&USBIP_VERSION.to_be_bytes());
     req[2..4].copy_from_slice(&OP_REQ_DEVLIST.to_be_bytes());
     req
 }
@@ -69,7 +69,7 @@ fn busid(b: &[u8]) -> String {
 }
 
 /// `None` while too few bytes have arrived to tell.
-pub fn classify(buf: &[u8]) -> Option<Request> {
+pub(crate) fn classify(buf: &[u8]) -> Option<Request> {
     if buf.len() < OP_HEADER_LEN {
         return None;
     }
@@ -106,7 +106,7 @@ fn num_interfaces(b: &[u8]) -> usize {
 }
 
 /// Asks the USB/IP server behind `127.0.0.1:port` for its exported devices.
-pub async fn fetch_devlist(port: u16) -> ResultType<Vec<Device>> {
+pub(crate) async fn fetch_devlist(port: u16) -> ResultType<Vec<Device>> {
     timeout(DEVLIST_TIMEOUT_MS, fetch_devlist_(port))
         .await
         .map_err(|_| anyhow!("USB/IP device list timed out"))?
